@@ -38,10 +38,10 @@ HELM ?= $(LOCALBIN)/helm
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 
 ## Tool Versions
-YQ_VERSION            ?= v4.53.2
-GOLANGCI_LINT_VERSION ?= v2.12.1
-HELM_VERSION          ?= v4.2.0
-CONTROLLER_GEN_VERSION ?= v0.20.0
+YQ_VERSION            ?= v4.53.3
+GOLANGCI_LINT_VERSION ?= v2.12.2
+HELM_VERSION          ?= v4.2.3
+CONTROLLER_GEN_VERSION ?= v0.21.0
 
 ##@ Tools
 
