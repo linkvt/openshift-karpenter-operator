@@ -12,8 +12,6 @@ import (
 // InfrastructureInfo contains cluster infrastructure metadata from the Infrastructure CR.
 type InfrastructureInfo struct {
 	PlatformType    configv1.PlatformType
-	PlatformStatus  configv1.PlatformStatus
-	TopologyMode    configv1.TopologyMode
 	Region          string
 	InfraName       string
 	ClusterEndpoint string

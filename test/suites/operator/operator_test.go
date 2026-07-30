@@ -62,8 +62,8 @@ var _ = Describe("Resources", Ordered, func() {
 	})
 
 	It("ClusterOperator should be available without a Karpenter CR", func() {
-		if env.IsExternalTopology() {
-			Skip("ClusterOperator doesn't run on hosted control plane topologies")
+		if env.IsManagementCluster() {
+			Skip("ClusterOperator doesn't run when the operator is in management cluster mode")
 		}
 		expectClusterOperatorAvailable(ctx)
 	})
@@ -88,8 +88,8 @@ var _ = Describe("Resources", Ordered, func() {
 
 	Context("ClusterOperator", func() {
 		BeforeEach(func() {
-			if env.IsExternalTopology() {
-				Skip("ClusterOperator doesn't run on hosted control plane topologies")
+			if env.IsManagementCluster() {
+				Skip("ClusterOperator doesn't run when the operator is in management cluster mode")
 			}
 		})
 

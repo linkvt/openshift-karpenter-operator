@@ -172,7 +172,6 @@ func (c *Controller) applyClusterRoleBindings(ctx context.Context, owner *autosc
 
 // TODO(maxcao13): currently if the aws binary doesn't detect valid AWS credentials, it will exit with an error, restarting the pod.
 // On HCP, there exists an init container bundled with karpenter to wait until such a credential is mounted to the pod.
-// We should consider adding a similar init container for both topologies, maybe by porting the HCP logic and container image here.
 func (c *Controller) applyDeployment(ctx context.Context, owner *autoscalingv1alpha1.Karpenter) error {
 	labels := map[string]string{"app": karpenterName}
 
@@ -238,15 +237,15 @@ func (c *Controller) karpenterPodSpec(logLevelArg string) *coreac.PodSpecApplyCo
 
 func (c *Controller) karpenterEnv(cloudCfg common.OperandCloudConfig) []*coreac.EnvVarApplyConfiguration {
 	env := []*coreac.EnvVarApplyConfiguration{
-		coreac.EnvVar().WithName("SYSTEM_NAMESPACE").
+		coreac.EnvVar().WithName(common.SystemNamespaceEnvName).
 			WithValueFrom(coreac.EnvVarSource().
 				WithFieldRef(coreac.ObjectFieldSelector().WithFieldPath("metadata.namespace")),
 			),
-		coreac.EnvVar().WithName("CLUSTER_NAME").WithValue(c.config.ClusterName),
-		coreac.EnvVar().WithName("CLUSTER_ENDPOINT").WithValue(c.config.ClusterEndpoint),
-		coreac.EnvVar().WithName("DISABLE_WEBHOOK").WithValue("true"),
+		coreac.EnvVar().WithName(common.ClusterNameEnvName).WithValue(c.config.ClusterName),
+		coreac.EnvVar().WithName(common.ClusterEndpointEnvName).WithValue(c.config.ClusterEndpoint),
+		coreac.EnvVar().WithName(common.DisableWebhookEnvName).WithValue("true"),
 		// TODO(maxcao13): allow users to specify feature gates through a Karpenter CR.
-		coreac.EnvVar().WithName("HEALTH_PROBE_PORT").WithValue(defaultHealthProbePortStr),
+		coreac.EnvVar().WithName(common.HealthProbePortEnvName).WithValue(defaultHealthProbePortStr),
 	}
 	return append(env, envVars(cloudCfg.Env)...)
 }

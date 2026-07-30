@@ -15,8 +15,6 @@ type EC2API interface {
 	DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
 }
 
-const karpenterImageEnvName = "KARPENTER_IMAGE_AWS"
-
 type Provider struct {
 	region          string
 	infraName       string
@@ -30,13 +28,13 @@ func New(ctx context.Context, infra common.InfrastructureInfo) (*Provider, error
 		return nil, fmt.Errorf("AWS region not available in Infrastructure CR")
 	}
 
-	karpenterImage := os.Getenv(karpenterImageEnvName)
+	karpenterImage := os.Getenv(KarpenterImageEnvName)
 	if karpenterImage == "" {
-		return nil, fmt.Errorf("%s not set", karpenterImageEnvName)
+		return nil, fmt.Errorf("%s not set", KarpenterImageEnvName)
 	}
 
-	if os.Getenv("AWS_SHARED_CREDENTIALS_FILE") == "" {
-		return nil, fmt.Errorf("AWS_SHARED_CREDENTIALS_FILE not set")
+	if os.Getenv(AWSSharedAuthFileEnvName) == "" {
+		return nil, fmt.Errorf("%s not set", AWSSharedAuthFileEnvName)
 	}
 
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(infra.Region))
