@@ -9,9 +9,15 @@ func TestLoadEnv(t *testing.T) {
 	t.Setenv(ReleaseVersionEnvName, "4.23.0")
 	t.Setenv(ClusterNameEnvName, "my-cluster")
 	t.Setenv(ClusterEndpointEnvName, "https://api-int.example.com:6443")
+	t.Setenv(PlatformEnvName, "AWS")
+	t.Setenv(RegionEnvName, "us-east-1")
+	t.Setenv(ManagementClusterEnvName, "true")
 
 	var opts Options
-	opts.LoadEnv()
+	err := opts.LoadEnv()
+	if err != nil {
+		t.Fatalf("failed to load env: %v", err)
+	}
 
 	if opts.ReleaseVersion != "4.23.0" {
 		t.Errorf("ReleaseVersion = %q, want %q", opts.ReleaseVersion, "4.23.0")
@@ -21,6 +27,24 @@ func TestLoadEnv(t *testing.T) {
 	}
 	if opts.ClusterEndpoint != "https://api-int.example.com:6443" {
 		t.Errorf("ClusterEndpoint = %q, want %q", opts.ClusterEndpoint, "https://api-int.example.com:6443")
+	}
+	if opts.Platform != "AWS" {
+		t.Errorf("Platform = %q, want %q", opts.Platform, "AWS")
+	}
+	if opts.Region != "us-east-1" {
+		t.Errorf("Region = %q, want %q", opts.Region, "us-east-1")
+	}
+	if !opts.ManagementCluster {
+		t.Error("ManagementCluster = false, want true")
+	}
+}
+
+func TestLoadEnvInvalidManagementCluster(t *testing.T) {
+	t.Setenv(ManagementClusterEnvName, "notabool")
+
+	var opts Options
+	if err := opts.LoadEnv(); err == nil {
+		t.Fatal("expected error for invalid MANAGEMENT_CLUSTER value, got nil")
 	}
 }
 
@@ -48,26 +72,52 @@ func TestValidate(t *testing.T) {
 			errMsg:  "--namespace",
 		},
 		{
-			name: "missing release version",
-			opts: Options{
-				Namespace: "openshift-karpenter",
-			},
-			wantErr: true,
-			errMsg:  ReleaseVersionEnvName,
-		},
-		{
 			name:    "missing all",
 			opts:    Options{},
 			wantErr: true,
 			errMsg:  "--namespace",
 		},
 		{
-			name: "cluster name and endpoint are optional",
+			name: "optional environment variables are not required",
 			opts: Options{
-				Namespace:      "openshift-karpenter",
-				ReleaseVersion: "4.23.0",
+				Namespace: "openshift-karpenter",
 			},
 			wantErr: false,
+		},
+		{
+			name: "management cluster mode missing required fields",
+			opts: Options{
+				Namespace:         "openshift-karpenter",
+				ManagementCluster: true,
+			},
+			wantErr: true,
+			errMsg:  "--guest-kubeconfig",
+		},
+		{
+			name: "management cluster mode valid",
+			opts: Options{
+				Namespace:         "openshift-karpenter",
+				ManagementCluster: true,
+				GuestKubeconfig:   "/var/run/secrets/kubeconfig",
+				ClusterName:       "my-cluster",
+				ClusterEndpoint:   "https://api-int.example.com:6443",
+				Platform:          "AWS",
+				Region:            "us-east-1",
+			},
+			wantErr: false,
+		},
+		{
+			name: "management cluster mode missing region",
+			opts: Options{
+				Namespace:         "openshift-karpenter",
+				ManagementCluster: true,
+				GuestKubeconfig:   "/var/run/secrets/kubeconfig",
+				ClusterName:       "my-cluster",
+				ClusterEndpoint:   "https://api-int.example.com:6443",
+				Platform:          "AWS",
+			},
+			wantErr: true,
+			errMsg:  RegionEnvName,
 		},
 	}
 

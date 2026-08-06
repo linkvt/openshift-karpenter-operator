@@ -33,6 +33,7 @@ func init() {
 	_ = autoscalingv1alpha1.AddToScheme(scheme)
 }
 
+// nolint:gocyclo
 func Run(ctx context.Context, opts Options) error {
 	setupLog := ctrl.Log.WithName("setup")
 
@@ -41,9 +42,22 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("failed to load kube config: %w", err)
 	}
 
-	infra, err := discoverInfrastructure(ctx, restCfg)
-	if err != nil {
-		return fmt.Errorf("failed to discover infrastructure: %w", err)
+	var infra common.InfrastructureInfo
+	if opts.ManagementCluster {
+		infra = discoverInfrastructureFromEnv(opts)
+	} else {
+		infra, err = discoverInfrastructure(ctx, restCfg)
+		if err != nil {
+			return fmt.Errorf("failed to discover infrastructure: %w", err)
+		}
+	}
+
+	// if env vars are still specified, then they override the discovered values
+	if opts.ClusterName != "" {
+		infra.InfraName = opts.ClusterName
+	}
+	if opts.ClusterEndpoint != "" {
+		infra.ClusterEndpoint = opts.ClusterEndpoint
 	}
 
 	provider, err := cloudprovider.GetCloudProvider(ctx, infra)
@@ -55,7 +69,6 @@ func Run(ctx context.Context, opts Options) error {
 
 	setupLog.Info("infrastructure",
 		"platform", infra.PlatformType,
-		"topologyMode", infra.TopologyMode,
 		"region", infra.Region,
 		"clusterName", cfg.ClusterName,
 		"clusterEndpoint", cfg.ClusterEndpoint,
@@ -101,6 +114,15 @@ func Run(ctx context.Context, opts Options) error {
 	return nil
 }
 
+func discoverInfrastructureFromEnv(opts Options) common.InfrastructureInfo {
+	return common.InfrastructureInfo{
+		PlatformType:    configv1.PlatformType(opts.Platform),
+		Region:          opts.Region,
+		InfraName:       opts.ClusterName,
+		ClusterEndpoint: opts.ClusterEndpoint,
+	}
+}
+
 func discoverInfrastructure(ctx context.Context, cfg *rest.Config) (common.InfrastructureInfo, error) {
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
@@ -124,8 +146,6 @@ func discoverInfrastructure(ctx context.Context, cfg *rest.Config) (common.Infra
 
 	return common.InfrastructureInfo{
 		PlatformType:    infra.Status.PlatformStatus.Type,
-		PlatformStatus:  *infra.Status.PlatformStatus,
-		TopologyMode:    infra.Status.ControlPlaneTopology,
 		Region:          region,
 		InfraName:       infra.Status.InfrastructureName,
 		ClusterEndpoint: infra.Status.APIServerInternalURL,
