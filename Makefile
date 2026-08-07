@@ -145,6 +145,10 @@ test: ## Run unit tests.
 e2e: ## Run e2e tests (requires KUBECONFIG).
 	go test ./test/suites/... -count=1 -timeout 30m -v $(JUNIT_REPORT)
 
+.PHONY: karpenter-core-regression
+karpenter-core-regression: yq ## Run upstream karpenter core regression e2e tests.
+	./hack/e2e/karpenter-core-regression.sh
+
 .PHONY: verify
 verify: vet lint test ## Run all verification checks.
 	$(MAKE) update
