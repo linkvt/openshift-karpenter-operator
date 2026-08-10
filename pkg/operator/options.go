@@ -55,9 +55,9 @@ type Options struct {
 	// Region is the cloud provider region (e.g. "us-east-1"), read from REGION env var.
 	Region string
 
-	// GuestKubeconfig is set via --guest-kubeconfig. Required when ManagementCluster
+	// TargetKubeconfig is set via --target-kubeconfig. Required when ManagementCluster
 	// is true; points at the guest cluster where Karpenter CRDs live.
-	GuestKubeconfig string
+	TargetKubeconfig string
 
 	// ManagementCluster is read from the MANAGEMENT_CLUSTER env var. When true, the
 	// operator assumes it is running on a HyperShift management cluster and is allowed to
@@ -106,8 +106,8 @@ func (o *Options) Validate() error {
 		missing = append(missing, "--namespace")
 	}
 	if o.ManagementCluster {
-		if o.GuestKubeconfig == "" {
-			missing = append(missing, "--guest-kubeconfig")
+		if o.TargetKubeconfig == "" {
+			missing = append(missing, "--target-kubeconfig")
 		}
 		if o.ClusterName == "" {
 			missing = append(missing, ClusterNameEnvName)

@@ -91,14 +91,14 @@ func TestValidate(t *testing.T) {
 				ManagementCluster: true,
 			},
 			wantErr: true,
-			errMsg:  "--guest-kubeconfig",
+			errMsg:  "--target-kubeconfig",
 		},
 		{
 			name: "management cluster mode valid",
 			opts: Options{
 				Namespace:         "openshift-karpenter",
 				ManagementCluster: true,
-				GuestKubeconfig:   "/var/run/secrets/kubeconfig",
+				TargetKubeconfig:  "/var/run/secrets/kubeconfig",
 				ClusterName:       "my-cluster",
 				ClusterEndpoint:   "https://api-int.example.com:6443",
 				Platform:          "AWS",
@@ -111,7 +111,7 @@ func TestValidate(t *testing.T) {
 			opts: Options{
 				Namespace:         "openshift-karpenter",
 				ManagementCluster: true,
-				GuestKubeconfig:   "/var/run/secrets/kubeconfig",
+				TargetKubeconfig:  "/var/run/secrets/kubeconfig",
 				ClusterName:       "my-cluster",
 				ClusterEndpoint:   "https://api-int.example.com:6443",
 				Platform:          "AWS",

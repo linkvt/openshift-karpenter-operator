@@ -25,7 +25,7 @@ func main() {
 	flag.BoolVar(&opts.LeaderElect, "leader-elect", false, "Enable leader election for controller manager")
 	// TODO(maxcao13): this is a no-op flag for now. We need it to make HCP not complaining about an unsupported flag.
 	// Making this flag manage Karpenter resources in HCP guest cluster is tracked in https://redhat.atlassian.net/browse/AUTOSCALE-877
-	flag.StringVar(&opts.GuestKubeconfig, "guest-kubeconfig", "", "Path to guest side kubeconfig file. Optional flag, but required for HyperShift mode")
+	flag.StringVar(&opts.TargetKubeconfig, "target-kubeconfig", "", "Path to the target cluster kubeconfig where Karpenter manages resources. Optional flag, but required for Management mode")
 
 	zapOpts := zap.Options{Development: false}
 	zapOpts.BindFlags(flag.CommandLine)
