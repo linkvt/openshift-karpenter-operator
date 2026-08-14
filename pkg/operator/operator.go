@@ -10,10 +10,12 @@ import (
 	"github.com/openshift/karpenter-operator/pkg/controllers"
 
 	configv1 "github.com/openshift/api/config/v1"
+	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -29,10 +31,11 @@ import (
 var scheme = runtime.NewScheme()
 
 func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = configv1.Install(scheme)
-	_ = apiextensionsv1.AddToScheme(scheme)
-	_ = autoscalingv1alpha1.AddToScheme(scheme)
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(configv1.Install(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(autoscalingv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(hyperv1.AddToScheme(scheme))
 }
 
 // nolint:gocyclo
