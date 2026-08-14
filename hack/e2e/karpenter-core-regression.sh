@@ -15,6 +15,7 @@ oc annotate -n "${HYPERSHIFT_NAMESPACE}-${CLUSTER}" "hcp/${CLUSTER}" hypershift.
 
 # Switch to guest cluster
 export KUBECONFIG=${SHARED_DIR}/nested_kubeconfig
+oc apply -f pkg/assets/crds/karpenter.sh_nodeoverlays.yaml
 oc delete validatingadmissionpolicybindings.admissionregistration.k8s.io karpenter-binding.ec2nodeclass.hypershift.io
 
 KARPENTER_CORE_DIR=$dir TEST_SUITE=regression ./hack/e2e/upstream-e2e.sh
