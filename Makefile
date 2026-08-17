@@ -97,6 +97,7 @@ update: fmt generate manifests lint-fix manifest-diff-sync
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate deepcopy methods.
 	$(CONTROLLER_GEN) object paths="./pkg/apis/..."
+	$(CONTROLLER_GEN) object paths="./api/karpenter/..."
 
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) ## Generate CRD manifests.
