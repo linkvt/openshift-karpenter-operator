@@ -36,6 +36,9 @@ var (
 
 	// AWSCRDs holds AWS-specific Karpenter CRDs (EC2NodeClass).
 	AWSCRDs []*apiextensionsv1.CustomResourceDefinition
+
+	// AzureCRDs holds Azure-specific Karpenter CRDs (AKSNodeClass).
+	AzureCRDs []*apiextensionsv1.CustomResourceDefinition
 )
 
 func init() {
@@ -90,5 +93,9 @@ func init() {
 
 	AWSCRDs = []*apiextensionsv1.CustomResourceDefinition{
 		mustDecode(crdContent, "crds/karpenter.k8s.aws_ec2nodeclasses.yaml").(*apiextensionsv1.CustomResourceDefinition),
+	}
+
+	AzureCRDs = []*apiextensionsv1.CustomResourceDefinition{
+		mustDecode(crdContent, "crds/karpenter.azure.com_aksnodeclasses.yaml").(*apiextensionsv1.CustomResourceDefinition),
 	}
 }
