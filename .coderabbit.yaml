@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Docs: https://docs.coderabbit.ai/getting-started/configure-coderabbit
+
+language: en-US
+early_access: false
+
+reviews:
+  profile: "chill"
+  high_level_summary: false
+  poem: false
+  request_changes_workflow: false
+  collapse_walkthrough: true
+
+  path_filters:
+    - "!vendor/**"
+    - "!**/vendor/**"
+    - "!**/zz_generated*"
+    - "!**/go.sum"
+
+  path_instructions:
+    - path: "pkg/controllers/**/*.go"
+      instructions: |
+        Review reconciliation for idempotency, correct target-client
+        selection, and status subresource updates where applicable.
+    - path: "api/karpenter/**/*.go"
+      instructions: |
+        Review API changes for backward compatibility, correct
+        kubebuilder markers, and proper JSON tags.
+    - path: "pkg/apis/autoscaling/**/*.go"
+      instructions: |
+        Review API changes for backward compatibility, correct
+        kubebuilder markers, and proper JSON tags.
+    - path: "pkg/cloudprovider/**/*.go"
+      instructions: |
+        Keep cloud-specific behavior behind the CloudProvider interface.
+        Avoid cloud-provider branches in shared controllers.
+
+  tools:
+    gitleaks:
+      enabled: true
+    golangci-lint:
+      enabled: true
+    hadolint:
+      enabled: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/AGENTS.md"
+      - "**/CONTRIBUTING.md"
+      - "hack/MANIFESTS.md"
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
