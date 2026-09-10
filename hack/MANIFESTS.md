@@ -40,7 +40,7 @@ and the operator's RBAC requirements.
 | -------- | ----- | ---------- | -------- |
 | `pkg/assets/operator/rbac.yaml` | Hand-maintained | — (source only) | Operator's own SA, Roles, Bindings |
 | `pkg/assets/karpenter/*.yaml` | `manifest-diff-upstream.sh` | Operator at runtime | Core operand RBAC |
-| `pkg/assets/aws/*.yaml` | `manifest-diff-upstream.sh` | Operator at runtime | AWS-specific operand RBAC and EC2NodeClass CRD |
+| `pkg/assets/aws/*.yaml` | `manifest-diff-upstream.sh` | Operator at runtime | AWS-specific operand RBAC and EC2NodeClass CRD with OpenShift schema adjustments |
 | `pkg/assets/azure/*.yaml` | `manifest-diff-upstream.sh` | Operator at runtime | AKSNodeClass CRD |
 | `pkg/assets/crds/*.yaml` | `manifest-diff-upstream.sh` | Operator at runtime | Core Karpenter CRDs (NodePool, NodeClaim, NodeOverlay) |
 | `install/04_rbac.yaml` | `manifest-diff.sh` | CVO | Operator RBAC + escalation superset |
@@ -53,7 +53,7 @@ function). Also includes cross-namespace operand RBAC like the kube-dns Role
 that CVO must apply statically.
 
 **Operand RBAC** (`pkg/assets/karpenter/`, `pkg/assets/aws/`): These are the Roles and
-ClusterRoles that the *karpenter operand* needs. The operator applies them
+ClusterRoles that the _karpenter operand_ needs. The operator applies them
 programmatically at runtime — they never go directly into `install/`.
 
 **Escalation superset** (`karpenter-operator-operand` ClusterRole/Role in `install/04_rbac.yaml`):
@@ -73,7 +73,7 @@ Fetches the OpenShift Karpenter fork, renders the Helm chart, and extracts:
 
 - RBAC resources → `pkg/assets/karpenter/` and `pkg/assets/aws/`
 - Core CRDs → `pkg/assets/crds/`
-- AWS CRDs → `pkg/assets/aws/`
+- AWS CRDs → `pkg/assets/aws/` (with OpenShift-specific schema adjustments)
 - Azure CRDs → `pkg/assets/azure/`
 
 Fails if upstream has RBAC resources not handled by an `extract` call.
