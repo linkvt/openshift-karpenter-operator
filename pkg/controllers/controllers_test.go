@@ -1,9 +1,12 @@
 package controllers
 
 import (
+	"context"
 	"slices"
 	"testing"
 
+	"github.com/openshift/karpenter-operator/pkg/cloudprovider/azure"
+	"github.com/openshift/karpenter-operator/pkg/cloudprovider/common"
 	testfake "github.com/openshift/karpenter-operator/test/pkg/fake"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -12,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	karpenterv1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 
 	"github.com/samber/lo"
 )
@@ -26,19 +31,51 @@ func newFakeManager() *testfake.Manager {
 	}
 }
 
+type testAWSCloudProvider struct {
+	*testfake.CloudProvider
+}
+
+func (p *testAWSCloudProvider) NodeIdentityVerifier() common.NodeIdentityVerifier {
+	return testNodeIdentityVerifier{}
+}
+
+type testNodeIdentityVerifier struct{}
+
+func (testNodeIdentityVerifier) Verify(_ context.Context, _ string, _ []karpenterv1.NodeClaim) (bool, error) {
+	return false, nil
+}
+
 func TestNewControllers(t *testing.T) {
 	tests := []struct {
 		name              string
+		cloudProvider     common.CloudProvider
+		hostedCluster     cluster.Cluster
 		managementCluster bool
 		wantControllers   []string
 	}{
 		{
 			name:              "When running in standalone mode it should enable all controllers",
+			cloudProvider:     &testfake.CloudProvider{Image: "test:latest"},
 			managementCluster: false,
 			wantControllers:   []string{"crd", "karpenter", "clusteroperator"},
 		},
 		{
-			name:              "When running in management cluster mode it should only enable HCP compatible controllers",
+			name:              "When management mode lacks hosted cluster, it should enable only controllers without hosted-cluster access",
+			cloudProvider:     &testfake.CloudProvider{Image: "test:latest"},
+			managementCluster: true,
+			wantControllers:   []string{"crd", "karpenter"},
+		},
+		{
+			name:              "When running in HCP AWS mode it should also enable the machine approver",
+			cloudProvider:     &testAWSCloudProvider{CloudProvider: &testfake.CloudProvider{Image: "test:latest"}},
+			hostedCluster:     &testfake.Cluster{Cl: fakeclient.NewClientBuilder().Build(), Ca: &testfake.Cache{}},
+			managementCluster: true,
+			wantControllers:   []string{"crd", "karpenter", "karpenter-machine-approver"},
+		},
+		{
+			name:              "When running in HCP Azure mode it should only enable core controllers",
+			cloudProvider:     &azure.Provider{},
+			hostedCluster:     &testfake.Cluster{Cl: fakeclient.NewClientBuilder().Build(), Ca: &testfake.Cache{}},
 			managementCluster: true,
 			wantControllers:   []string{"crd", "karpenter"},
 		},
@@ -52,8 +89,9 @@ func TestNewControllers(t *testing.T) {
 				ClusterName:       "test-cluster",
 				ClusterEndpoint:   "https://api.example.com:6443",
 				ReleaseVersion:    "4.23.0",
+				CloudProvider:     tc.cloudProvider,
+				HostedCluster:     tc.hostedCluster,
 				ManagementCluster: tc.managementCluster,
-				CloudProvider:     &testfake.CloudProvider{Image: "test:latest"},
 			}
 
 			controllers := NewControllers(newFakeManager(), cfg)
