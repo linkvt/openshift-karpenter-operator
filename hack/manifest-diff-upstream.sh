@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Syncs or diffs operand RBAC and CRDs from the OpenShift karpenter-provider-aws fork
-# Helm chart into pkg/assets/karpenter/, pkg/assets/aws/, and pkg/assets/crds/.
-# Also syncs the AKSNodeClass CRD from the OpenShift Azure-karpenter-provider-azure fork.
+# Helm chart into pkg/assets/karpenter/, pkg/assets/aws/, pkg/assets/crds/, and
+# pkg/assets/azure/. Also syncs the AKSNodeClass CRD from the OpenShift
+# Azure-karpenter-provider-azure fork.
 #
 # Downloads the chart at a pinned branch, renders it with `helm template`, then
 # extracts RBAC resources with yq, stripping Helm labels.
-# CRDs are copied directly from the chart into pkg/assets/crds/.
+# Core CRDs (karpenter.sh_*) go to pkg/assets/crds/; AWS CRDs (karpenter.k8s.aws_*)
+# go to pkg/assets/aws/; Azure CRDs go to pkg/assets/azure/.
 #
 # When upstream adds new RBAC resources, this script will fail and list them.
 # To handle a new resource, add an `extract KIND NAME FILE` call in the
@@ -28,6 +30,7 @@ NAMESPACE="openshift-karpenter"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CORE_DIR="${REPO_ROOT}/pkg/assets/karpenter"
 AWS_DIR="${REPO_ROOT}/pkg/assets/aws"
+AZURE_DIR="${REPO_ROOT}/pkg/assets/azure"
 CRD_DIR="${REPO_ROOT}/pkg/assets/crds"
 MODE="${1:-}"
 
@@ -55,8 +58,10 @@ $HELM template karpenter "$chart_dir" \
 
 # --- Extract resources --------------------------------------------------------
 core_staging="${tmpdir}/core"
+crd_staging="${tmpdir}/crds"
 aws_staging="${tmpdir}/aws"
-mkdir -p "$core_staging" "$aws_staging"
+azure_staging="${tmpdir}/azure"
+mkdir -p "$core_staging" "$crd_staging" "$aws_staging" "$azure_staging"
 
 # Strip Helm-injected labels; keep functional ones like aggregate-to-admin.
 strip='
@@ -121,14 +126,16 @@ if [[ -n "$unhandled" ]]; then
   exit 1
 fi
 
-# --- Stage CRDs (AWS) ---------------------------------------------------------
-crd_staging="${tmpdir}/crds"
-mkdir -p "$crd_staging"
+# --- Stage CRDs (AWS chart) ---------------------------------------------------
 for f in "${crd_dir}"/*.yaml; do
   [[ -f "$f" ]] || continue
   local_name="$(basename "$f")"
-  printf '%s\n' "$header" > "${crd_staging}/${local_name}"
-  cat "$f" >> "${crd_staging}/${local_name}"
+  dest="$crd_staging"
+  if [[ "$local_name" == karpenter.k8s.aws_* ]]; then
+    dest="$aws_staging"
+  fi
+  printf '%s\n' "$header" > "${dest}/${local_name}"
+  cat "$f" >> "${dest}/${local_name}"
 done
 
 # --- Stage CRDs (Azure) ------------------------------------------------------
@@ -141,8 +148,8 @@ azure_crd_dir=$(find "$tmpdir" -type d -path "*/charts/karpenter/crds" -not -pat
 for f in "${azure_crd_dir}"/karpenter.azure.com_*.yaml; do
   [[ -f "$f" ]] || continue
   local_name="$(basename "$f")"
-  printf '%s\n' "$azure_header" > "${crd_staging}/${local_name}"
-  cat "$f" >> "${crd_staging}/${local_name}"
+  printf '%s\n' "$azure_header" > "${azure_staging}/${local_name}"
+  cat "$f" >> "${azure_staging}/${local_name}"
 done
 
 # --- Diff or sync -------------------------------------------------------------
@@ -186,13 +193,15 @@ diff_dir() {
 }
 
 if [[ "$MODE" == "--sync" ]]; then
+  mkdir -p "$CORE_DIR" "$CRD_DIR" "$AWS_DIR" "$AZURE_DIR"
   rm -f "${CORE_DIR}"/*.yaml
   cp "${core_staging}"/*.yaml "${CORE_DIR}/"
-  rm -f "${AWS_DIR}"/*.yaml
-  cp "${aws_staging}"/*.yaml "${AWS_DIR}/"
-  mkdir -p "$CRD_DIR"
   rm -f "${CRD_DIR}"/*.yaml
   cp "${crd_staging}"/*.yaml "${CRD_DIR}/"
+  rm -f "${AWS_DIR}"/*.yaml
+  cp "${aws_staging}"/*.yaml "${AWS_DIR}/"
+  rm -f "${AZURE_DIR}"/*.yaml
+  cp "${azure_staging}"/*.yaml "${AZURE_DIR}/"
   echo "==> Synced. Review:"
   echo "      git diff pkg/assets/"
   exit 0
@@ -201,8 +210,9 @@ fi
 echo "==> Comparing..."
 exitcode=0
 diff_dir "$core_staging" "$CORE_DIR" || exitcode=1
-diff_dir "$aws_staging" "$AWS_DIR" || exitcode=1
 diff_dir "$crd_staging" "$CRD_DIR" || exitcode=1
+diff_dir "$aws_staging" "$AWS_DIR" || exitcode=1
+diff_dir "$azure_staging" "$AZURE_DIR" || exitcode=1
 
 if [[ $exitcode -eq 0 ]]; then
   echo "==> In sync with ${AWS_REPO_NAME} ${OPERAND_BRANCH}."
