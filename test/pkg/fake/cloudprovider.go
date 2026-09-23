@@ -14,6 +14,7 @@ import (
 type CloudProvider struct {
 	Image            string
 	DefaultNodeClass common.DefaultNodeClassProvider
+	HCPNodeClass     common.HCPNodeClassProvider
 	CloudConfig      common.OperandCloudConfig
 	CloudRBAC        common.RBACAssets
 	CloudCRDs        []*apiextensionsv1.CustomResourceDefinition
@@ -25,6 +26,9 @@ var _ common.CloudProvider = &CloudProvider{}
 func (f *CloudProvider) AddToScheme(_ *runtime.Scheme) error { return nil }
 func (f *CloudProvider) DefaultNodeClassProvider() common.DefaultNodeClassProvider {
 	return f.DefaultNodeClass
+}
+func (f *CloudProvider) HCPNodeClassProvider() common.HCPNodeClassProvider {
+	return f.HCPNodeClass
 }
 func (f *CloudProvider) KarpenterImage() string                            { return f.Image }
 func (f *CloudProvider) OperandConfig() common.OperandCloudConfig          { return f.CloudConfig }
