@@ -1,7 +1,6 @@
 package clusteroperator
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -24,11 +23,6 @@ const (
 	testReleaseVersion = "4.19.0"
 )
 
-var testConfig = &ControllerConfig{
-	Namespace:      testNamespace,
-	ReleaseVersion: testReleaseVersion,
-}
-
 var testKarpenterCR = &autoscalingv1alpha1.Karpenter{
 	ObjectMeta: metav1.ObjectMeta{Name: autoscalingv1alpha1.SingletonName},
 }
@@ -41,32 +35,30 @@ func testScheme() *runtime.Scheme {
 	return s
 }
 
-func newTestController(objs ...client.Object) *Controller {
+func newTestController(cfg *ControllerConfig, objs ...client.Object) *Controller {
 	return &Controller{
 		client: fakeclient.NewClientBuilder().
 			WithScheme(testScheme()).
 			WithObjects(objs...).
 			WithStatusSubresource(&configv1.ClusterOperator{}).
 			Build(),
-		config: testConfig,
+		config: cfg,
 	}
 }
 
-func TestReconcile(t *testing.T) { //nolint:gocyclo
-	testCases := []struct {
-		name               string
-		objs               []client.Object
-		expectAvailable    configv1.ConditionStatus
-		expectProgressing  configv1.ConditionStatus
-		expectDegraded     configv1.ConditionStatus
-		expectUpgradeable  configv1.ConditionStatus
-		expectMessageOn    configv1.ClusterStatusConditionType
-		expectMessage      string
-		expectVersion      string
-		expectRelatedObjCt int
+func TestReconcile(t *testing.T) {
+	testCases := map[string]struct {
+		objs                []client.Object
+		unsupportedPlatform *configv1.PlatformType
+		expectAvailable     configv1.ConditionStatus
+		expectProgressing   configv1.ConditionStatus
+		expectDegraded      configv1.ConditionStatus
+		expectUpgradeable   configv1.ConditionStatus
+		expectMessageOn     configv1.ClusterStatusConditionType
+		expectMessage       string
+		expectRelatedObjCt  int
 	}{
-		{
-			name:               "no Karpenter CR — reports Available",
+		"When no Karpenter CR exists, it should report Available": {
 			objs:               nil,
 			expectAvailable:    configv1.ConditionTrue,
 			expectProgressing:  configv1.ConditionFalse,
@@ -74,11 +66,9 @@ func TestReconcile(t *testing.T) { //nolint:gocyclo
 			expectUpgradeable:  configv1.ConditionTrue,
 			expectMessageOn:    configv1.OperatorAvailable,
 			expectMessage:      "at version " + testReleaseVersion,
-			expectVersion:      testReleaseVersion,
 			expectRelatedObjCt: 6,
 		},
-		{
-			name:               "Karpenter CR exists, Deployment not found — reports Progressing",
+		"When the operand Deployment does not exist, it should report Progressing": {
 			objs:               []client.Object{testKarpenterCR},
 			expectAvailable:    configv1.ConditionTrue,
 			expectProgressing:  configv1.ConditionTrue,
@@ -86,11 +76,9 @@ func TestReconcile(t *testing.T) { //nolint:gocyclo
 			expectUpgradeable:  configv1.ConditionTrue,
 			expectMessageOn:    configv1.OperatorProgressing,
 			expectMessage:      "Waiting for karpenter Deployment to be created",
-			expectVersion:      testReleaseVersion,
 			expectRelatedObjCt: 6,
 		},
-		{
-			name: "operand Deployment not ready — reports Progressing",
+		"When the operand Deployment is not ready, it should report Progressing": {
 			objs: []client.Object{
 				testKarpenterCR,
 				&appsv1.Deployment{
@@ -104,11 +92,9 @@ func TestReconcile(t *testing.T) { //nolint:gocyclo
 			expectUpgradeable:  configv1.ConditionTrue,
 			expectMessageOn:    configv1.OperatorProgressing,
 			expectMessage:      "Waiting for karpenter Deployment to become available",
-			expectVersion:      testReleaseVersion,
 			expectRelatedObjCt: 6,
 		},
-		{
-			name: "operand Deployment rolling out — reports Progressing",
+		"When the operand Deployment is rolling out, it should report Progressing": {
 			objs: []client.Object{
 				testKarpenterCR,
 				&appsv1.Deployment{
@@ -122,11 +108,9 @@ func TestReconcile(t *testing.T) { //nolint:gocyclo
 			expectUpgradeable:  configv1.ConditionTrue,
 			expectMessageOn:    configv1.OperatorProgressing,
 			expectMessage:      "Karpenter Deployment is rolling out",
-			expectVersion:      testReleaseVersion,
 			expectRelatedObjCt: 6,
 		},
-		{
-			name: "operand Deployment healthy — reports Available",
+		"When the operand Deployment is healthy, it should report Available": {
 			objs: []client.Object{
 				testKarpenterCR,
 				&appsv1.Deployment{
@@ -140,65 +124,35 @@ func TestReconcile(t *testing.T) { //nolint:gocyclo
 			expectUpgradeable:  configv1.ConditionTrue,
 			expectMessageOn:    configv1.OperatorAvailable,
 			expectMessage:      "at version " + testReleaseVersion,
-			expectVersion:      testReleaseVersion,
 			expectRelatedObjCt: 6,
 		},
-		{
-			name: "updates existing ClusterOperator",
-			objs: []client.Object{
-				testKarpenterCR,
-				&appsv1.Deployment{
-					ObjectMeta: metav1.ObjectMeta{Name: "karpenter", Namespace: testNamespace},
-					Status:     appsv1.DeploymentStatus{Replicas: 1, AvailableReplicas: 1, UpdatedReplicas: 1},
-				},
-				&configv1.ClusterOperator{
-					ObjectMeta: metav1.ObjectMeta{Name: clusterOperatorName},
-					Status: configv1.ClusterOperatorStatus{
-						Conditions: []configv1.ClusterOperatorStatusCondition{
-							{
-								Type:               configv1.OperatorAvailable,
-								Status:             configv1.ConditionFalse,
-								LastTransitionTime: metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
-							},
-							{
-								Type:               configv1.OperatorDegraded,
-								Status:             configv1.ConditionTrue,
-								Reason:             "SomePreviousError",
-								LastTransitionTime: metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
-							},
-							{
-								// Upgradeable=True matches what reconcile will produce,
-								// so LastTransitionTime must be preserved.
-								Type:               configv1.OperatorUpgradeable,
-								Status:             configv1.ConditionTrue,
-								Reason:             "AsExpected",
-								LastTransitionTime: metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
-							},
-						},
-					},
-				},
-			},
-			expectAvailable:    configv1.ConditionTrue,
-			expectProgressing:  configv1.ConditionFalse,
-			expectDegraded:     configv1.ConditionFalse,
-			expectUpgradeable:  configv1.ConditionTrue,
-			expectMessageOn:    configv1.OperatorAvailable,
-			expectMessage:      "at version " + testReleaseVersion,
-			expectVersion:      testReleaseVersion,
-			expectRelatedObjCt: 6,
+		"When the platform is unsupported, it should report Available even if a Karpenter CR exists": {
+			objs:                []client.Object{testKarpenterCR},
+			unsupportedPlatform: new(configv1.VSpherePlatformType),
+			expectAvailable:     configv1.ConditionTrue,
+			expectProgressing:   configv1.ConditionFalse,
+			expectDegraded:      configv1.ConditionFalse,
+			expectUpgradeable:   configv1.ConditionTrue,
+			expectMessageOn:     configv1.OperatorAvailable,
+			expectMessage:       "Karpenter is not supported on platform VSphere, no operand is deployed",
+			expectRelatedObjCt:  4,
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			sc := newTestController(tc.objs...)
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			sc := newTestController(&ControllerConfig{
+				Namespace:           testNamespace,
+				ReleaseVersion:      testReleaseVersion,
+				UnsupportedPlatform: tc.unsupportedPlatform,
+			}, tc.objs...)
 
-			if _, err := sc.Reconcile(context.Background(), ctrl.Request{}); err != nil {
+			if _, err := sc.Reconcile(t.Context(), ctrl.Request{}); err != nil {
 				t.Fatalf("Reconcile() returned error: %v", err)
 			}
 
 			co := &configv1.ClusterOperator{}
-			if err := sc.client.Get(context.Background(), client.ObjectKey{Name: clusterOperatorName}, co); err != nil {
+			if err := sc.client.Get(t.Context(), client.ObjectKey{Name: clusterOperatorName}, co); err != nil {
 				t.Fatalf("failed to get ClusterOperator: %v", err)
 			}
 
@@ -213,32 +167,79 @@ func TestReconcile(t *testing.T) { //nolint:gocyclo
 				t.Errorf("expected %s message %q, got %q", tc.expectMessageOn, tc.expectMessage, cond.Message)
 			}
 
-			if len(co.Status.Versions) != 1 || co.Status.Versions[0].Version != tc.expectVersion {
-				t.Errorf("expected version %q, got %+v", tc.expectVersion, co.Status.Versions)
+			if len(co.Status.Versions) != 1 || co.Status.Versions[0].Version != testReleaseVersion {
+				t.Errorf("expected version %q, got %+v", testReleaseVersion, co.Status.Versions)
 			}
 
 			if len(co.Status.RelatedObjects) != tc.expectRelatedObjCt {
 				t.Errorf("expected %d related objects, got %d", tc.expectRelatedObjCt, len(co.Status.RelatedObjects))
 			}
-
-			if tc.name == "updates existing ClusterOperator" {
-				seeded := metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
-
-				// Available changed False→True: timestamp must advance.
-				if cond := findCondition(co.Status.Conditions, configv1.OperatorAvailable); cond != nil {
-					if !cond.LastTransitionTime.After(seeded.Time) {
-						t.Errorf("Available changed status but LastTransitionTime was not updated: got %v", cond.LastTransitionTime)
-					}
-				}
-
-				// Upgradeable stayed True→True: timestamp must be preserved.
-				if cond := findCondition(co.Status.Conditions, configv1.OperatorUpgradeable); cond != nil {
-					if !cond.LastTransitionTime.Equal(&seeded) {
-						t.Errorf("Upgradeable status unchanged but LastTransitionTime changed: got %v, want %v", cond.LastTransitionTime, seeded)
-					}
-				}
-			}
 		})
+	}
+}
+
+func TestReconcilePreservesTransitionTimes(t *testing.T) {
+	seeded := metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	sc := newTestController(
+		&ControllerConfig{Namespace: testNamespace, ReleaseVersion: testReleaseVersion},
+		testKarpenterCR,
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "karpenter", Namespace: testNamespace},
+			Status:     appsv1.DeploymentStatus{Replicas: 1, AvailableReplicas: 1, UpdatedReplicas: 1},
+		},
+		&configv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterOperatorName},
+			Status: configv1.ClusterOperatorStatus{
+				Conditions: []configv1.ClusterOperatorStatusCondition{
+					{
+						Type:               configv1.OperatorAvailable,
+						Status:             configv1.ConditionFalse,
+						LastTransitionTime: seeded,
+					},
+					{
+						Type:               configv1.OperatorDegraded,
+						Status:             configv1.ConditionTrue,
+						Reason:             "SomePreviousError",
+						LastTransitionTime: seeded,
+					},
+					{
+						// Upgradeable=True matches what reconcile will produce,
+						// so LastTransitionTime must be preserved.
+						Type:               configv1.OperatorUpgradeable,
+						Status:             configv1.ConditionTrue,
+						Reason:             "AsExpected",
+						LastTransitionTime: seeded,
+					},
+				},
+			},
+		},
+	)
+
+	if _, err := sc.Reconcile(t.Context(), ctrl.Request{}); err != nil {
+		t.Fatalf("Reconcile() returned error: %v", err)
+	}
+
+	co := &configv1.ClusterOperator{}
+	if err := sc.client.Get(t.Context(), client.ObjectKey{Name: clusterOperatorName}, co); err != nil {
+		t.Fatalf("failed to get ClusterOperator: %v", err)
+	}
+
+	// Available changed False→True: timestamp must advance.
+	available := findCondition(co.Status.Conditions, configv1.OperatorAvailable)
+	if available == nil {
+		t.Fatalf("condition %s not found", configv1.OperatorAvailable)
+	}
+	if !available.LastTransitionTime.After(seeded.Time) {
+		t.Errorf("Available changed status but LastTransitionTime was not updated: got %v", available.LastTransitionTime)
+	}
+
+	// Upgradeable stayed True→True: timestamp must be preserved.
+	upgradeable := findCondition(co.Status.Conditions, configv1.OperatorUpgradeable)
+	if upgradeable == nil {
+		t.Fatalf("condition %s not found", configv1.OperatorUpgradeable)
+	}
+	if !upgradeable.LastTransitionTime.Equal(&seeded) {
+		t.Errorf("Upgradeable status unchanged but LastTransitionTime changed: got %v, want %v", upgradeable.LastTransitionTime, seeded)
 	}
 }
 
@@ -248,13 +249,11 @@ func TestConditionHelpers(t *testing.T) {
 		reason string
 	}
 
-	testCases := []struct {
-		name       string
+	testCases := map[string]struct {
 		conditions []*configac.ClusterOperatorStatusConditionApplyConfiguration
 		expect     map[configv1.ClusterStatusConditionType]expectedCondition
 	}{
-		{
-			name:       "availableConditions",
+		"When building available conditions, it should set Available with the given reason": {
 			conditions: availableConditions("KarpenterNotFound", "all good"),
 			expect: map[configv1.ClusterStatusConditionType]expectedCondition{
 				configv1.OperatorAvailable:   {configv1.ConditionTrue, "KarpenterNotFound"},
@@ -263,8 +262,7 @@ func TestConditionHelpers(t *testing.T) {
 				configv1.OperatorUpgradeable: {configv1.ConditionTrue, "AsExpected"},
 			},
 		},
-		{
-			name:       "progressingConditions",
+		"When building progressing conditions, it should set Progressing with the given reason": {
 			conditions: progressingConditions("Rolling", "rolling out"),
 			expect: map[configv1.ClusterStatusConditionType]expectedCondition{
 				configv1.OperatorAvailable:   {configv1.ConditionTrue, "AsExpected"},
@@ -273,8 +271,7 @@ func TestConditionHelpers(t *testing.T) {
 				configv1.OperatorUpgradeable: {configv1.ConditionTrue, "AsExpected"},
 			},
 		},
-		{
-			name:       "degradedConditions",
+		"When building degraded conditions, it should set Degraded with the given reason": {
 			conditions: degradedConditions("Broken", "something failed"),
 			expect: map[configv1.ClusterStatusConditionType]expectedCondition{
 				configv1.OperatorAvailable:   {configv1.ConditionTrue, "AsExpected"},
@@ -285,8 +282,8 @@ func TestConditionHelpers(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
 			for _, c := range tc.conditions {
 				condType := *c.Type
 				want, ok := tc.expect[condType]
