@@ -8,6 +8,7 @@ import (
 	"github.com/openshift/karpenter-operator/pkg/cloudprovider/common"
 	"github.com/openshift/karpenter-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/karpenter-operator/pkg/controllers/crd"
+	"github.com/openshift/karpenter-operator/pkg/controllers/hcp"
 	"github.com/openshift/karpenter-operator/pkg/controllers/karpenter"
 	"github.com/openshift/karpenter-operator/pkg/controllers/machineapprover"
 	defaultnodeclass "github.com/openshift/karpenter-operator/pkg/controllers/nodeclass/default"
@@ -78,6 +79,9 @@ func NewControllers(mgr ctrl.Manager, cfg *Config) []Controller {
 				TokenMinterImage: cfg.TokenMinterImage,
 			}),
 		)
+		if cfg.HostedCluster != nil {
+			controllers = append(controllers, hcp.NewController(mgr, &hcp.ControllerConfig{HostedCluster: cfg.HostedCluster, Namespace: cfg.Namespace}))
+		}
 
 		if controller := newMachineApproverController(cfg); controller != nil {
 			controllers = append(controllers, controller)

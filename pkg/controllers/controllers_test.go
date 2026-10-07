@@ -75,14 +75,14 @@ func TestNewControllers(t *testing.T) {
 			}},
 			hostedCluster:     &testfake.Cluster{Cl: fakeclient.NewClientBuilder().Build(), Ca: &testfake.Cache{}},
 			managementCluster: true,
-			wantControllers:   []string{"crd", "default-nodeclass", "ec2-nodeclass", "karpenter", "karpenter-machine-approver"},
+			wantControllers:   []string{"crd", "default-nodeclass", "ec2-nodeclass", "karpenter", "hostedcontrolplane", "karpenter-machine-approver"},
 		},
 		{
 			name:              "When running in HCP Azure mode, it should enable HCP-enabled controllers",
 			cloudProvider:     &azure.Provider{},
 			hostedCluster:     &testfake.Cluster{Cl: fakeclient.NewClientBuilder().Build(), Ca: &testfake.Cache{}},
 			managementCluster: true,
-			wantControllers:   []string{"crd", "default-nodeclass", "azure-nodeclass", "azure-nodeclass-vap", "karpenter"},
+			wantControllers:   []string{"crd", "default-nodeclass", "azure-nodeclass", "azure-nodeclass-vap", "karpenter", "hostedcontrolplane"},
 		},
 	}
 
