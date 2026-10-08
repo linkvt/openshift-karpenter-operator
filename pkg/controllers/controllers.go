@@ -8,7 +8,8 @@ import (
 	"github.com/openshift/karpenter-operator/pkg/cloudprovider/common"
 	"github.com/openshift/karpenter-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/karpenter-operator/pkg/controllers/crd"
-	"github.com/openshift/karpenter-operator/pkg/controllers/hcp"
+	"github.com/openshift/karpenter-operator/pkg/controllers/hcp/autonodestatus"
+	hcpdeletion "github.com/openshift/karpenter-operator/pkg/controllers/hcp/deletion"
 	"github.com/openshift/karpenter-operator/pkg/controllers/karpenter"
 	"github.com/openshift/karpenter-operator/pkg/controllers/machineapprover"
 	defaultnodeclass "github.com/openshift/karpenter-operator/pkg/controllers/nodeclass/default"
@@ -80,7 +81,10 @@ func NewControllers(mgr ctrl.Manager, cfg *Config) []Controller {
 			}),
 		)
 		if cfg.HostedCluster != nil {
-			controllers = append(controllers, hcp.NewController(mgr, &hcp.ControllerConfig{HostedCluster: cfg.HostedCluster, Namespace: cfg.Namespace}))
+			controllers = append(controllers,
+				autonodestatus.NewController(mgr, &autonodestatus.ControllerConfig{HostedCluster: cfg.HostedCluster, Namespace: cfg.Namespace}),
+				hcpdeletion.NewController(mgr, &hcpdeletion.ControllerConfig{HostedCluster: cfg.HostedCluster, Namespace: cfg.Namespace}),
+			)
 		}
 
 		if controller := newMachineApproverController(cfg); controller != nil {
