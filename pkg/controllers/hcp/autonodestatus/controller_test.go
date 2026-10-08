@@ -81,17 +81,64 @@ func TestNodeClaimPredicate(t *testing.T) {
 }
 
 func TestCountChangePredicate(t *testing.T) {
-	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}}
+	tests := map[string]struct {
+		oldLabels map[string]string
+		mutate    func(*corev1.Node)
+		want      bool
+	}{
+		"When the Karpenter nodepool label is added, it should enqueue reconciliation": {
+			mutate: func(node *corev1.Node) {
+				node.Labels[karpenterv1.NodePoolLabelKey] = "default"
+			},
+			want: true,
+		},
+		"When the Karpenter nodepool label is removed, it should enqueue reconciliation": {
+			oldLabels: map[string]string{karpenterv1.NodePoolLabelKey: "default"},
+			mutate: func(node *corev1.Node) {
+				delete(node.Labels, karpenterv1.NodePoolLabelKey)
+			},
+			want: true,
+		},
+		"When an unrelated label changes, it should not enqueue reconciliation": {
+			mutate: func(node *corev1.Node) {
+				node.Labels["unrelated"] = "changed"
+			},
+		},
+		"When the Karpenter nodepool label value changes, it should not enqueue reconciliation": {
+			oldLabels: map[string]string{karpenterv1.NodePoolLabelKey: "pool-a"},
+			mutate: func(node *corev1.Node) {
+				node.Labels[karpenterv1.NodePoolLabelKey] = "pool-b"
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			oldNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", Labels: tc.oldLabels}}
+			newNode := oldNode.DeepCopy()
+			if newNode.Labels == nil {
+				newNode.Labels = map[string]string{}
+			}
+			tc.mutate(newNode)
+
+			g := NewWithT(t)
+			g.Expect(countChangePredicate().Update(event.TypedUpdateEvent[*corev1.Node]{
+				ObjectOld: oldNode,
+				ObjectNew: newNode,
+			})).To(Equal(tc.want))
+		})
+	}
 
 	t.Run("When a Node is created or deleted, it should enqueue reconciliation", func(t *testing.T) {
+		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}}
 		g := NewWithT(t)
 		g.Expect(countChangePredicate().Create(event.TypedCreateEvent[*corev1.Node]{Object: node})).To(BeTrue())
 		g.Expect(countChangePredicate().Delete(event.TypedDeleteEvent[*corev1.Node]{Object: node})).To(BeTrue())
 	})
 
-	t.Run("When a Node is updated or a generic event occurs, it should not enqueue reconciliation", func(t *testing.T) {
+	t.Run("When a generic event occurs, it should not enqueue reconciliation", func(t *testing.T) {
+		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}}
 		g := NewWithT(t)
-		g.Expect(countChangePredicate().Update(event.TypedUpdateEvent[*corev1.Node]{ObjectOld: node, ObjectNew: node})).To(BeFalse())
 		g.Expect(countChangePredicate().Generic(event.TypedGenericEvent[*corev1.Node]{Object: node})).To(BeFalse())
 	})
 }

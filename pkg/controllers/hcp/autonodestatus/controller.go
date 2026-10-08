@@ -106,13 +106,20 @@ func nodeClaimPredicate() predicate.TypedPredicate[*karpenterv1.NodeClaim] {
 	}
 }
 
-// countChangePredicate only enqueues on Add/Delete — not status-only updates — since reconcileAutoNodeStatus cares only
-// about count changes (nodes joining or leaving the cluster).
+// countChangePredicate enqueues on Node creation/deletion and when the Karpenter nodepool
+// label's presence changes.
 func countChangePredicate() predicate.TypedPredicate[*corev1.Node] {
 	return predicate.TypedFuncs[*corev1.Node]{
-		CreateFunc:  func(event.TypedCreateEvent[*corev1.Node]) bool { return true },
-		DeleteFunc:  func(event.TypedDeleteEvent[*corev1.Node]) bool { return true },
-		UpdateFunc:  func(event.TypedUpdateEvent[*corev1.Node]) bool { return false },
+		CreateFunc: func(event.TypedCreateEvent[*corev1.Node]) bool { return true },
+		DeleteFunc: func(event.TypedDeleteEvent[*corev1.Node]) bool { return true },
+		UpdateFunc: func(e event.TypedUpdateEvent[*corev1.Node]) bool {
+			// Karpenter patches NodeClaim labels onto the Node before updating NodeClaim status.
+			// The NodeClaim watch can enqueue reconciliation before the Node informer observes
+			// that patch so we have to watch label changes.
+			_, wasKarpenter := e.ObjectOld.Labels[karpenterv1.NodePoolLabelKey]
+			_, isKarpenter := e.ObjectNew.Labels[karpenterv1.NodePoolLabelKey]
+			return wasKarpenter != isKarpenter
+		},
 		GenericFunc: func(event.TypedGenericEvent[*corev1.Node]) bool { return false },
 	}
 }
