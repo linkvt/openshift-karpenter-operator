@@ -680,7 +680,7 @@ type OpenshiftEC2NodeClass struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// spec defines the desired state of the OpenshiftEC2NodeClass.
-	// +required
+	// +optional
 	Spec OpenshiftEC2NodeClassSpec `json:"spec,omitzero"`
 
 	// status defines the observed state of the OpenshiftEC2NodeClass.

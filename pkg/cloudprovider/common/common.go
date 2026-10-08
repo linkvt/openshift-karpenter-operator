@@ -47,7 +47,7 @@ type NodeIdentityVerifier interface {
 type HCPNodeClassProvider interface {
 	// DefaultNodeClass returns a target object and mutation function for CreateOrUpdate.
 	// It returns nil when the platform has no default NodeClass.
-	DefaultNodeClass(infraID string) (client.Object, controllerutil.MutateFn, error)
+	DefaultNodeClass() (client.Object, controllerutil.MutateFn, error)
 	// WatchObject returns an empty typed object used to register the hosted-cluster watch.
 	WatchObject() client.Object
 	// CRDs returns the platform NodeClass CRDs installed into the hosted cluster.

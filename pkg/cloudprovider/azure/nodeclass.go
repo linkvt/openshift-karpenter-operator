@@ -23,7 +23,7 @@ func (p *Provider) HCPNodeClassProvider() common.HCPNodeClassProvider {
 }
 
 // DefaultNodeClass returns nil because Azure default NodeClass is not supported.
-func (hcpAzureNodeClassProvider) DefaultNodeClass(_ string) (client.Object, controllerutil.MutateFn, error) {
+func (hcpAzureNodeClassProvider) DefaultNodeClass() (client.Object, controllerutil.MutateFn, error) {
 	return nil, nil, nil
 }
 

@@ -26,7 +26,7 @@ const defaultNodeClassName = "default"
 // NodeClassProvider supplies the default NodeClass and watch type for a hosted cluster.
 type NodeClassProvider interface {
 	// DefaultNodeClass returns the target object and mutation function for reconciliation.
-	DefaultNodeClass(infraID string) (client.Object, controllerutil.MutateFn, error)
+	DefaultNodeClass() (client.Object, controllerutil.MutateFn, error)
 	// WatchObject returns an empty typed object used to register the hosted-cluster watch.
 	WatchObject() client.Object
 }
@@ -138,7 +138,7 @@ func (c *Controller) reconcileHCP(ctx context.Context, hcp *hyperv1beta1.HostedC
 	}
 
 	// Provider supplies typed target object and complete desired-state mutation.
-	defaultNodeClass, mutate, err := c.config.Provider.DefaultNodeClass(hcp.Spec.InfraID)
+	defaultNodeClass, mutate, err := c.config.Provider.DefaultNodeClass()
 	if err != nil {
 		return err
 	}

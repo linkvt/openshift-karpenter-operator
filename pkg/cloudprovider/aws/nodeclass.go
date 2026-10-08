@@ -19,7 +19,7 @@ var _ common.HCPNodeClassProvider = hcpEC2NodeClassProvider{}
 type hcpEC2NodeClassProvider struct{}
 
 // DefaultNodeClass returns the default AWS NodeClass and mutation function for its complete desired state.
-func (hcpEC2NodeClassProvider) DefaultNodeClass(infraID string) (client.Object, controllerutil.MutateFn, error) {
+func (hcpEC2NodeClassProvider) DefaultNodeClass() (client.Object, controllerutil.MutateFn, error) {
 	nodeClass := &openshiftkarpenterv1.OpenshiftEC2NodeClass{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: openshiftkarpenterv1.SchemeGroupVersion.String(),
@@ -31,18 +31,7 @@ func (hcpEC2NodeClassProvider) DefaultNodeClass(infraID string) (client.Object, 
 		nodeClass.Labels = map[string]string{
 			"app.kubernetes.io/managed-by": "karpenter-operator",
 		}
-		nodeClass.Spec = openshiftkarpenterv1.OpenshiftEC2NodeClassSpec{
-			SubnetSelectorTerms: []openshiftkarpenterv1.SubnetSelectorTerm{
-				{
-					Tags: ec2nodeclass.DefaultSubnetSelectorTags(infraID),
-				},
-			},
-			SecurityGroupSelectorTerms: []openshiftkarpenterv1.SecurityGroupSelectorTerm{
-				{
-					Tags: ec2nodeclass.DefaultSecurityGroupSelectorTags(infraID),
-				},
-			},
-		}
+		nodeClass.Spec = openshiftkarpenterv1.OpenshiftEC2NodeClassSpec{}
 		return nil
 	}
 	return nodeClass, mutate, nil

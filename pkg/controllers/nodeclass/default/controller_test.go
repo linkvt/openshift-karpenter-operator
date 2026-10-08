@@ -290,7 +290,7 @@ type testDefaultNodeClassProvider struct {
 	noDefault bool
 }
 
-func (p testDefaultNodeClassProvider) DefaultNodeClass(infraID string) (client.Object, controllerutil.MutateFn, error) {
+func (p testDefaultNodeClassProvider) DefaultNodeClass() (client.Object, controllerutil.MutateFn, error) {
 	if p.noDefault {
 		return nil, nil, nil
 	}
@@ -299,7 +299,7 @@ func (p testDefaultNodeClassProvider) DefaultNodeClass(infraID string) (client.O
 		object.Labels = map[string]string{"managed-by": "test"}
 		object.Spec = openshiftkarpenterv1.OpenshiftEC2NodeClassSpec{
 			SubnetSelectorTerms: []openshiftkarpenterv1.SubnetSelectorTerm{{
-				Tags: map[string]string{"test": infraID},
+				Tags: map[string]string{"test": testInfraID},
 			}},
 		}
 		return nil
