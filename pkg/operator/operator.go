@@ -10,6 +10,7 @@ import (
 	"github.com/openshift/karpenter-operator/pkg/cloudprovider"
 	"github.com/openshift/karpenter-operator/pkg/cloudprovider/common"
 	"github.com/openshift/karpenter-operator/pkg/controllers"
+	"github.com/openshift/karpenter-operator/pkg/controllers/clusteroperator"
 
 	configv1 "github.com/openshift/api/config/v1"
 	hyperv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
@@ -80,6 +81,11 @@ func Run(ctx context.Context, opts Options) error {
 		infra.ClusterEndpoint = opts.ClusterEndpoint
 	}
 
+	if !isPlatformSupported(opts.ManagementCluster, infra.PlatformType) {
+		setupLog.Info("Platform is not supported, only reporting ClusterOperator status", "platform", infra.PlatformType)
+		return runClusterOperatorReporter(ctx, restCfg, opts, infra.PlatformType)
+	}
+
 	provider, err := cloudprovider.GetCloudProvider(ctx, infra)
 	if err != nil {
 		return fmt.Errorf("initializing cloud provider: %w", err)
@@ -99,20 +105,9 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("adding cloud provider types to scheme: %w", err)
 	}
 
-	mgr, err := ctrl.NewManager(restCfg, ctrl.Options{
-		Scheme: scheme,
-		Cache: cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				opts.Namespace: {},
-			},
-		},
-		Metrics:                server.Options{BindAddress: opts.MetricsAddr},
-		HealthProbeBindAddress: opts.ProbeAddr,
-		LeaderElection:         opts.LeaderElect,
-		LeaderElectionID:       "karpenter-operator.openshift.io",
-	})
+	mgr, err := newManager(restCfg, opts)
 	if err != nil {
-		return fmt.Errorf("creating manager: %w", err)
+		return err
 	}
 
 	// Only build a hosted cluster if we are running in management cluster mode and a target kubeconfig is provided
@@ -139,19 +134,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	go controllers.SetupOperatorInfoMetricWithRetry(ctx, mgr.GetAPIReader(), opts.Namespace)
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return fmt.Errorf("setting up health check: %w", err)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		return fmt.Errorf("setting up ready check: %w", err)
-	}
-
-	setupLog.Info("Starting manager")
-	if err := mgr.Start(ctx); err != nil {
-		return fmt.Errorf("starting manager: %w", err)
-	}
-
-	return nil
+	return startManager(ctx, mgr)
 }
 
 func discoverInfrastructureFromEnv(opts Options) common.InfrastructureInfo {
@@ -190,4 +173,67 @@ func discoverInfrastructure(ctx context.Context, cfg *rest.Config) (common.Infra
 		InfraName:       infra.Status.InfrastructureName,
 		ClusterEndpoint: infra.Status.APIServerInternalURL,
 	}, nil
+}
+
+// isPlatformSupported reports whether the operator deploys Karpenter on the platform.
+// Standalone install manifests only configure AWS, so every other platform is unsupported
+// in standalone mode.
+// Management clusters configure the platform per hosted cluster.
+func isPlatformSupported(managementCluster bool, platform configv1.PlatformType) bool {
+	return managementCluster || platform == configv1.AWSPlatformType
+}
+
+// runClusterOperatorReporter runs only the ClusterOperator controller, which reports the
+// operator as available without deploying Karpenter on the unsupported platform.
+func runClusterOperatorReporter(ctx context.Context, restCfg *rest.Config, opts Options, platform configv1.PlatformType) error {
+	mgr, err := newManager(restCfg, opts)
+	if err != nil {
+		return err
+	}
+
+	reporter := clusteroperator.NewController(mgr, &clusteroperator.ControllerConfig{
+		Namespace:           opts.Namespace,
+		ReleaseVersion:      opts.ReleaseVersion,
+		UnsupportedPlatform: &platform,
+	})
+	if err := controllers.Setup(mgr, reporter); err != nil {
+		return err
+	}
+
+	return startManager(ctx, mgr)
+}
+
+func newManager(restCfg *rest.Config, opts Options) (ctrl.Manager, error) {
+	mgr, err := ctrl.NewManager(restCfg, ctrl.Options{
+		Scheme: scheme,
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				opts.Namespace: {},
+			},
+		},
+		Metrics:                server.Options{BindAddress: opts.MetricsAddr},
+		HealthProbeBindAddress: opts.ProbeAddr,
+		LeaderElection:         opts.LeaderElect,
+		LeaderElectionID:       "karpenter-operator.openshift.io",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating manager: %w", err)
+	}
+	return mgr, nil
+}
+
+func startManager(ctx context.Context, mgr ctrl.Manager) error {
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		return fmt.Errorf("setting up health check: %w", err)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		return fmt.Errorf("setting up ready check: %w", err)
+	}
+
+	ctrl.Log.WithName("setup").Info("Starting manager")
+	if err := mgr.Start(ctx); err != nil {
+		return fmt.Errorf("starting manager: %w", err)
+	}
+
+	return nil
 }

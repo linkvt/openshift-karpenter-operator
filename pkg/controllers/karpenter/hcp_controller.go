@@ -120,7 +120,7 @@ func (c *HCPController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
 						SecretName:  hcp.Spec.InfraID + "-kubeconfig",
-						DefaultMode: ptr.To(int32(0640)),
+						DefaultMode: new(int32(0640)),
 						Items: []corev1.KeyToPath{
 							{Key: targetKubeconfigSecretKey, Path: targetKubeconfigFilePath},
 						},
